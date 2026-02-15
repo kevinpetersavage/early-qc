@@ -1,0 +1,22 @@
+[project]
+name = "mapq-tool"
+version = "0.1.0"
+description = "A tool to classify DNA sequences using the kpps/mapq model"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "transformers",
+    "peft",
+    "torch",
+    "seaborn",
+    "matplotlib",
+    "numpy",
+    "accelerate",
+]
+
+[project.scripts]
+mapq-classify = "mapq_classify:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

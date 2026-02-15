@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+results/
+*.fastq
+*.png
+.DS_Store
