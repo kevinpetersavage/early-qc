@@ -81,6 +81,47 @@ def download_sample_data(url, output_path, limit_lines=10000):
         print(f"Error downloading sample data: {e}")
         raise
 
+def load_model_and_tokenizer(model_name, adapter_name):
+    """Loads the tokenizer and the model with the adapter."""
+    print(f"Loading tokenizer: {model_name}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    print(f"Loading base model: {model_name}")
+    base_model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=1)
+
+    print(f"Loading adapter: {adapter_name}")
+    model = PeftModel.from_pretrained(base_model, adapter_name)
+    return model, tokenizer
+
+def run_inference(model, tokenizer, sequences, batch_size=16):
+    """Runs inference on a list of sequences."""
+    test_dataset = SequenceMAPQgt30Dataset(sequences, [0] * len(sequences), tokenizer)
+
+    training_args = TrainingArguments(
+        output_dir="./results",
+        per_device_eval_batch_size=batch_size,
+        report_to="none",
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+    )
+
+    print("Running predictions...")
+    predictions_output = trainer.predict(test_dataset)
+    return predictions_output.predictions
+
+def save_histogram(predictions, output_plot):
+    """Saves a histogram of the predictions."""
+    print(f"Saving histogram to {output_plot}...")
+    plt.figure(figsize=(10, 6))
+    sns.histplot(predictions)
+    plt.title("MAPQ Prediction Distribution")
+    plt.xlabel("Prediction Score")
+    plt.ylabel("Count")
+    plt.savefig(output_plot)
+
 def main():
     parser = argparse.ArgumentParser(description="Classify DNA sequences from a FASTQ file.")
     parser.add_argument("--input", type=str, help="Path to the input FASTQ file.")
@@ -101,14 +142,7 @@ def main():
         print("Please provide an input file using --input or use --download_sample.")
         return
 
-    print(f"Loading tokenizer: {args.model}")
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
-
-    print(f"Loading base model: {args.model}")
-    base_model = AutoModelForSequenceClassification.from_pretrained(args.model, num_labels=1)
-
-    print(f"Loading adapter: {args.adapter}")
-    model = PeftModel.from_pretrained(base_model, args.adapter)
+    model, tokenizer = load_model_and_tokenizer(args.model, args.adapter)
 
     print(f"Parsing sequences from {input_file}...")
     test_sequences = list(parse_fastq(input_file))
@@ -118,22 +152,7 @@ def main():
         print("No sequences found in the input file.")
         return
 
-    test_dataset = SequenceMAPQgt30Dataset(test_sequences, [0] * len(test_sequences), tokenizer)
-
-    training_args = TrainingArguments(
-        output_dir="./results",
-        per_device_eval_batch_size=args.batch_size,
-        report_to="none",
-    )
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-    )
-
-    print("Running predictions...")
-    predictions_output = trainer.predict(test_dataset)
-    predictions = predictions_output.predictions
+    predictions = run_inference(model, tokenizer, test_sequences, args.batch_size)
 
     # Calculate counts
     low_mapq_count = np.sum(predictions < 0.5)
@@ -146,13 +165,7 @@ def main():
     print(f"MAPQ >= 30 (predicted >= 0.5): {high_mapq_count} ({high_mapq_count/total:.2%})")
 
     # Plotting
-    print(f"Saving histogram to {args.output_plot}...")
-    plt.figure(figsize=(10, 6))
-    sns.histplot(predictions)
-    plt.title("MAPQ Prediction Distribution")
-    plt.xlabel("Prediction Score")
-    plt.ylabel("Count")
-    plt.savefig(args.output_plot)
+    save_histogram(predictions, args.output_plot)
     print("Done!")
 
 if __name__ == "__main__":

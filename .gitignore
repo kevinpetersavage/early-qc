@@ -6,3 +6,5 @@ results/
 *.fastq
 *.png
 .DS_Store
+build/
+*.egg-info/
